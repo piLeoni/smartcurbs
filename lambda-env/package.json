@@ -1,0 +1,14 @@
+{
+    "name": "smartcurbsapi",
+    "description": "MIT Senseable City Lab Smart Curbs Api",
+    "version": "0.0.1",
+    "private": true,
+    "dependencies": {
+        "axios":"^0.21.1",
+        "pg":"^8.5.1"
+    },
+    "scripts": {
+        "build": "sam build",
+        "serve": "sam local start-api"
+    }
+}

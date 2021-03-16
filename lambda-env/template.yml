@@ -1,0 +1,104 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: smartcurbs_api
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    Runtime: nodejs14.x
+    MemorySize: 128
+    Timeout: 100
+    Environment:
+      Variables:
+        PGUSER: <...>
+        PGHOST: <...>
+        PGDATABASE: <...>
+        PG_TABLE: messages
+        PGPASSWORD: <...>
+        PGPORT: 5432
+
+Resources:
+
+  sclApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Auth:
+        ApiKeyRequired: true # sets for all methods
+  
+  ApiKey: 
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: [ApiUsagePlan]
+    Properties: 
+      Name: !Join ["", [{"Ref": "AWS::StackName"}, "-bearertoken"]]
+      Description: "CloudFormation API Key V1"
+      Enabled: true
+      GenerateDistinctId: false
+      Value: 3nwwkTyH6Q5Q1Q22xxTP13fOnB9aoQGJ7oNcoSGr
+      StageKeys:
+        - RestApiId: !Ref sclApiGateway
+          StageName: Prod
+
+  ApiUsagePlan:
+    Type: "AWS::ApiGateway::UsagePlan"
+    DependsOn:
+      - sclApiGatewayProdStage
+    Properties:
+      ApiStages: 
+        - ApiId: !Ref sclApiGateway
+          Stage: Prod
+      Description: !Join [" ", [{"Ref": "AWS::StackName"}, "usage plan"]]
+      # Quota:
+      #   Limit: 10
+      #   Period: MONTH
+      UsagePlanName: !Join ["", [{"Ref": "AWS::StackName"}, "-usage-plan"]]
+  
+  ApiUsagePlanKey:
+    Type: "AWS::ApiGateway::UsagePlanKey"
+    DependsOn: 
+      - sclApiGateway
+    Properties:
+      KeyId: !Ref ApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiUsagePlan
+
+
+  collectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/collectFunction.lambdaHandler
+      Description: A Lambda function for collecting entries.
+      Policies: AWSLambdaBasicExecutionRole
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /collect
+            Method: POST
+            RestApiId:
+              Ref: sclApiGateway
+            Auth:
+              ApiKeyRequired: true
+
+
+  healtCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/healtCheckFunction.lambdaHandler
+      Description: A Lambda function to check the API status.
+      Policies: AWSLambdaBasicExecutionRole
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /healtcheck
+            Method: GET
+            RestApiId:
+              Ref: sclApiGateway
+            Auth:
+              ApiKeyRequired: false
+
+
+Outputs:
+  WebEndpoint:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${sclApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
